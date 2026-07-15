@@ -1,10 +1,30 @@
 # Agentic AI Engineer with LangChain and LangGraph Nanodegree
 
-Author: Jasdeep Sidhu
-
 This repository consolidates three agentic AI projects built while working through
 LangChain and LangGraph workflows. Each project remains in its own top-level
 directory so it can be explored, installed, and run independently.
+
+## Author
+
+**Jasdeep Sidhu**
+
+- GitHub: [JasdeepSidhu13](https://github.com/JasdeepSidhu13)
+- LinkedIn: [linkedin.com/in/jssidhu9](https://www.linkedin.com/in/jssidhu9/)
+
+All three projects listed here were completed by Jasdeep Sidhu as part of the
+Udacity Agentic AI Nanodegree coursework and portfolio.
+
+## Certification
+
+This portfolio is backed by a verified Udacity certificate confirming completion
+of the **Agentic AI Engineer with LangChain and LangGraph Nanodegree** Nanodegree program.
+
+- **Awarded to:** Jasdeep Sidhu
+- **Program:** Agentic AI Engineer with LangChain and LangGraph Nanodegree
+- **Date:** July 2, 2026
+- **Certificate (PDF):** [`Certificate-Agentic AI Engineer with LangChain and LangGraph.pdf`](Certificate-Agentic AI Engineer with LangChain and LangGraph.pdf)
+- **Verify online:** [udacity.com/certificate/e/20e4ad9a-64e2-11f1-8114-8fa89ddacc26](https://www.udacity.com/certificate/e/20e4ad9a-64e2-11f1-8114-8fa89ddacc26)
+
 
 ## Repository Contents
 
