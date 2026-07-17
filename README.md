@@ -33,7 +33,7 @@ of the **Agentic AI Engineer with LangChain and LangGraph Nanodegree** Nanodegre
 | DocuMind Graph | [`DocuMind-Graph/`](DocuMind-Graph/) | Multi-agent document assistant for question answering, summarization, and document-based calculations. |
 | EcoHome Agent | [`EcoHome-Agent/`](EcoHome-Agent/) | Energy optimization advisor that combines smart-home data, retrieval, and tool-based recommendations. |
 | UDA-Hub | [`Uda-Hub/`](Uda-Hub/) | Customer support supervisor system for classifying, routing, resolving, and escalating support tickets. |
-| Powerline Agent | [`Powerline-Agent/`](Powerline-Agent/) | Battery Co-Pilot agentic AI for portfolio benchmarking, market analysis, and operational recommendations. |
+| Powerline Agent | [`Powerline-Agent/`](Powerline-Agent/) | LLM agent with tools for battery historical vs perfect-foresight gap analysis and trading recommendations. |
 
 ## High-Level Structure
 
@@ -67,6 +67,7 @@ of the **Agentic AI Engineer with LangChain and LangGraph Nanodegree** Nanodegre
 │       └── README.md
 ├── Powerline-Agent/
 │   ├── architecture.md
+│   ├── example_output.md
 │   ├── main.py
 │   ├── requirements.txt
 │   ├── data/

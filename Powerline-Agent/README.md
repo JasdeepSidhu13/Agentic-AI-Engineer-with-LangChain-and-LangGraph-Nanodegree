@@ -1,164 +1,125 @@
-# Powerline Battery Co-Pilot
+# Powerline Battery Performance Agent
 
-An agentic AI system for battery portfolio operations, built for the Powerline take-home assignment. The assistant answers questions about energy asset performance, compares results against Powerline-perfect benchmarks, and recommends market strategy improvements.
+LLM-powered agent that analyzes one week of battery interval data, compares **historical operation** vs **perfect foresight**, and produces actionable trading recommendations — using tools, not raw data in the prompt.
 
-## Overview
-
-This project implements a **multi-agent LangGraph workflow** that mirrors Powerline's Battery Co-Pilot product:
-
-- **Supervisor** orchestrates specialist agents
-- **Classifier** parses user intent, assets, and time ranges
-- **Data Analyst** runs SQL-backed analytics tools over `data.csv`
-- **Market Advisor** combines data results with RAG domain knowledge
-- **Evaluator** validates answer quality before responding
-
-See [architecture.md](architecture.md) for the full design document.
-
-## Architecture
-
-```mermaid
-graph TD
-    START([User Query]) --> SUP[Supervisor]
-    SUP --> CLS[Classifier]
-    SUP --> DA[Data Analyst]
-    SUP --> MA[Market Advisor + RAG]
-    SUP --> EV[Evaluator]
-    SUP --> FIN([Response])
-    CLS --> SUP
-    DA --> SUP
-    MA --> SUP
-    EV --> SUP
-```
-
-## Features
-
-| Capability | Implementation |
-|------------|----------------|
-| LangGraph orchestration | `StateGraph` with supervisor routing |
-| Tools | Revenue metrics, benchmark comparison, time-series aggregation, charts |
-| RAG | Chroma-free embedding search over energy domain docs |
-| Short-term memory | LangGraph `MemorySaver` checkpointer per session |
-| Long-term memory | SQLite-backed user memory store |
-| OpenAI | `gpt-4o-mini` + `text-embedding-3-small` |
-
-## Project Structure
-
-```text
-Powerline-Agent/
-├── architecture.md       # Detailed architecture design
-├── README.md             # This file
-├── main.py               # Interactive CLI
-├── requirements.txt
-├── example.env
-├── data/
-│   ├── data.csv          # Battery operations dataset
-│   └── knowledge/        # RAG source documents
-├── src/
-│   ├── workflow.py       # LangGraph compilation
-│   ├── state.py          # Shared agent state
-│   ├── data_loader.py    # CSV → SQLite loader
-│   ├── agents/           # Specialist agent nodes
-│   ├── tools/            # Data and memory tools
-│   └── retrieval/        # RAG pipeline
-└── tests/
-```
-
-## Setup
+## How to Run
 
 ```bash
 cd Powerline-Agent
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp example.env .env
-```
-
-Add your OpenAI API key to `.env`:
-
-```env
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-```
-
-Replace `data/data.csv` with the assignment dataset if provided separately.
-
-## Usage
-
-### Interactive CLI
-
-```bash
+cp example.env .env        # add your OPENAI_API_KEY
 python main.py
 ```
 
-Example queries:
-
-- "What is the total revenue for each asset?"
-- "Which asset has the lowest capture rate?"
-- "Compare actual revenue against the benchmark for asset_001"
-- "Explain capture rate and how to improve it"
-
-### Run Tests
+Optional flags:
 
 ```bash
-pytest tests/ -q
+python main.py --data path/to/data.csv
+python main.py --prompt "Your custom analysis question"
+python main.py --output example_output.md
 ```
 
-## Agents
+Run tests:
 
-### Supervisor
-Central router. Reads graph state and dispatches to the next specialist based on intent, available data, and evaluation status.
+```bash
+python -m pytest tests/ -q
+```
 
-### Classifier
-Structured LLM output (`ClassificationResult`) identifying intent category, target assets, and time range.
+## High-Level Approach
 
-### Data Analyst
-ReAct agent with access to SQL-backed tools. Computes metrics from `data.csv` without generating free-form code.
+1. **Load data** — CSV is normalized via a schema adapter so the same code works on any dataset with the expected columns (see [Generalization](#generalization)).
+2. **Agent calls tools** — A LangGraph ReAct agent invokes Python analysis functions over the dataset.
+3. **Synthesize report** — The LLM uses tool outputs to produce a structured decision-support brief for a battery trader.
 
-### Market Advisor
-Combines tool outputs with RAG-retrieved domain knowledge to produce grounded recommendations.
+```
+User prompt → ReAct Agent → Tools (Python) → Structured report
+```
 
-### Evaluator
-Quality gate checking grounding, completeness, and hallucination risk. Retries up to 2 times if quality is insufficient.
+The agent is instructed to call tools in a fixed order and never invent numbers.
 
-## Tools
+## How the Agent Uses Tools
+
+The agent has five tools defined in `src/tools.py`:
 
 | Tool | Purpose |
 |------|---------|
-| `query_asset_data` | Filter operational rows |
-| `compute_revenue_metrics` | Revenue, benchmark, capture rate aggregates |
-| `benchmark_comparison` | Gap analysis by asset or day |
-| `time_series_aggregate` | Daily/hourly metric rollups |
-| `generate_chart` | Matplotlib chart export |
-| `retrieve_domain_knowledge` | RAG search over knowledge docs |
-| `store_long_term_memory` | Persist cross-session context |
-| `retrieve_long_term_memory` | Load prior user context |
+| `compute_revenue_summary` | Total historical revenue, perfect revenue, and gap |
+| `identify_high_price_intervals` | Top-N price spikes and whether dispatch was missed |
+| `compare_historical_vs_perfect_dispatch` | Intervals with the largest revenue gap |
+| `analyze_state_of_charge_patterns` | SOC constraints during high-price periods |
+| `get_dataset_info` | Dataset metadata (time range, row count) |
 
-## Memory
+The workflow in `src/agent.py`:
 
-**Short-term**: LangGraph checkpointer keyed by `thread_id` — enables multi-turn follow-ups within a session.
+1. Agent receives the user prompt.
+2. Agent calls `compute_revenue_summary` to quantify the gap.
+3. Agent calls dispatch and price tools to identify drivers.
+4. Agent calls SOC analysis for contributing factors.
+5. Agent writes the final report with gap, drivers, and 2 recommendations.
 
-**Long-term**: SQLite `memory.db` stores user preferences, analysis summaries, and strategy notes keyed by `user_id`.
+Tool outputs are JSON strings returned to the LLM as observations — the model reasons over these, not over raw CSV rows.
 
-## RAG Knowledge Base
+## Project Structure
 
-Documents in `data/knowledge/`:
+```text
+Powerline-Agent/
+├── main.py              # Runnable entry point
+├── README.md
+├── example_output.md    # Example prompt + output
+├── architecture.md      # Design notes
+├── requirements.txt
+├── example.env
+├── data/
+│   └── data.csv         # One week, interval-level battery data
+├── src/
+│   ├── data_loader.py   # CSV loading + schema normalization
+│   ├── tools.py         # Analysis tools
+│   └── agent.py         # LangGraph ReAct agent
+└── tests/
+    └── test_tools.py
+```
 
-- `battery_operations.md` — SOC, power/energy, revenue formulas
-- `market_trading_basics.md` — spot markets, bidding, capture rate
-- `benchmarking_methodology.md` — Powerline-perfect benchmark methodology
+## Generalization
 
-## Design Decisions
+The system runs on any CSV with the same schema without code changes. Column names are normalized via aliases in `src/data_loader.py`:
 
-1. **SQL tools over code generation** — safer, auditable numeric results for energy metrics
-2. **Supervisor pattern** — separates data analysis from advisory reasoning
-3. **Evaluator retry loop** — reduces hallucinated metrics in final answers
-4. **Schema adapter** — normalizes varying CSV column names from the assignment dataset
+| Canonical Column | Accepted Aliases |
+|------------------|------------------|
+| `historical_revenue_usd` | `historical_revenue`, `actual_revenue_usd`, `revenue_usd` |
+| `perfect_revenue_usd` | `perfect_revenue`, `benchmark_revenue_usd`, `counterfactual_revenue_usd` |
+| `historical_power_mw` | `historical_power`, `actual_power_mw`, `power_mw` |
+| `perfect_power_mw` | `perfect_power`, `counterfactual_power_mw` |
 
-## Data
+Point to a new file with `--data path/to/other.csv`.
 
-The included `data/data.csv` contains 7 days of 15-minute interval records for 3 battery assets in the NEM market. Replace with the official assignment file when available — the schema adapter handles common column name variations.
+## Example Output
+
+See [example_output.md](example_output.md) for a full example prompt and grounded agent response.
+
+**Quick summary from the included dataset:**
+
+| Metric | Value |
+|--------|-------|
+| Historical revenue | $146,734.24 |
+| Perfect revenue | $217,519.99 |
+| Gap | $70,785.75 |
+
+## Requirements Mapping
+
+| Assignment Requirement | Implementation |
+|------------------------|----------------|
+| LLM agent + tools | LangGraph `create_react_agent` with 5 Python tools |
+| Structured workflow | Agent calls tools sequentially, then synthesizes |
+| Quantify gap | `compute_revenue_summary` |
+| Identify drivers | `compare_historical_vs_perfect_dispatch`, `identify_high_price_intervals`, `analyze_state_of_charge_patterns` |
+| 2 recommendations | Structured output template in agent system prompt |
+| Generalization | Schema alias adapter in `data_loader.py` |
+| Runnable script | `main.py` |
+| README | This file |
+| Example output | `example_output.md` |
 
 ## Author
 
-Jasdeep Sidhu — Agentic AI Engineer portfolio project
+Jasdeep Sidhu

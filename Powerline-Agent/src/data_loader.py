@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -8,17 +7,16 @@ import pandas as pd
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "data.csv"
 
-COLUMN_ALIASES = {
+# Maps canonical names to acceptable CSV column aliases for generalization.
+COLUMN_ALIASES: dict[str, list[str]] = {
     "timestamp": ["timestamp", "datetime", "time", "interval_start"],
-    "asset_id": ["asset_id", "asset", "project_id", "asset_name"],
-    "market": ["market", "region", "iso"],
-    "power_mw": ["power_mw", "power", "dispatch_mw", "net_power_mw"],
-    "energy_mwh": ["energy_mwh", "energy", "mwh"],
-    "state_of_charge_pct": ["state_of_charge_pct", "soc", "soc_pct", "state_of_charge"],
     "market_price_usd_mwh": ["market_price_usd_mwh", "price", "lmp", "spot_price"],
-    "revenue_usd": ["revenue_usd", "revenue", "actual_revenue"],
-    "benchmark_revenue_usd": ["benchmark_revenue_usd", "benchmark_revenue", "perfect_revenue"],
-    "capture_rate": ["capture_rate", "capture", "performance_ratio"],
+    "historical_power_mw": ["historical_power_mw", "historical_power", "actual_power_mw", "power_mw"],
+    "perfect_power_mw": ["perfect_power_mw", "perfect_power", "counterfactual_power_mw"],
+    "historical_revenue_usd": ["historical_revenue_usd", "historical_revenue", "actual_revenue_usd", "revenue_usd"],
+    "perfect_revenue_usd": ["perfect_revenue_usd", "perfect_revenue", "benchmark_revenue_usd", "counterfactual_revenue_usd"],
+    "state_of_charge_pct": ["state_of_charge_pct", "soc", "soc_pct", "state_of_charge"],
+    "perfect_state_of_charge_pct": ["perfect_state_of_charge_pct", "perfect_soc", "perfect_soc_pct"],
 }
 
 
@@ -31,42 +29,47 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
                 rename[lower_map[alias.lower()]] = canonical
                 break
     normalized = df.rename(columns=rename)
-    required = ["timestamp", "asset_id", "revenue_usd", "benchmark_revenue_usd"]
+    required = [
+        "timestamp",
+        "historical_revenue_usd",
+        "perfect_revenue_usd",
+        "historical_power_mw",
+        "perfect_power_mw",
+        "market_price_usd_mwh",
+        "state_of_charge_pct",
+    ]
     missing = [col for col in required if col not in normalized.columns]
     if missing:
         raise ValueError(f"CSV missing required columns after normalization: {missing}")
     normalized["timestamp"] = pd.to_datetime(normalized["timestamp"])
-    return normalized
+    return normalized.sort_values("timestamp").reset_index(drop=True)
 
 
 class DataStore:
+    """In-memory view of interval-level battery performance data."""
+
     def __init__(self, csv_path: Path | None = None):
         path = csv_path or DATA_PATH
         self.df = _normalize_columns(pd.read_csv(path))
-        self.conn = sqlite3.connect(":memory:", check_same_thread=False)
-        self.df.to_sql("asset_data", self.conn, index=False, if_exists="replace")
-        self.schema = {
-            "columns": list(self.df.columns),
-            "assets": sorted(self.df["asset_id"].unique().tolist()),
+
+    @property
+    def summary(self) -> dict[str, Any]:
+        return {
+            "row_count": len(self.df),
             "time_min": str(self.df["timestamp"].min()),
             "time_max": str(self.df["timestamp"].max()),
-            "row_count": len(self.df),
+            "columns": list(self.df.columns),
         }
-
-    def query(self, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
-        cursor = self.conn.execute(sql, params)
-        columns = [desc[0] for desc in cursor.description]
-        return [dict(zip(columns, row)) for row in cursor.fetchall()]
-
-    def describe(self) -> dict[str, Any]:
-        return self.schema
 
 
 _STORE: DataStore | None = None
 
 
-def get_data_store() -> DataStore:
+def get_data_store(csv_path: Path | None = None) -> DataStore:
     global _STORE
+    if csv_path is not None:
+        _STORE = DataStore(csv_path)
+        return _STORE
     if _STORE is None:
         _STORE = DataStore()
     return _STORE
